@@ -265,6 +265,10 @@ class FullyConnectedNet(object):
                                                            self.params['W' + str(i)],
                                                            self.params['b' + str(i)])
 
+            if self.use_dropout:
+                layers[i], dropout_cache = dropout_forward(layers[i], self.dropout_param)
+                caches[i] = (caches[i], dropout_cache)
+
         layers[self.num_layers], caches[self.num_layers] = affine_forward(layers[self.num_layers - 1],
                                                                           self.params['W' + str(self.num_layers)],
                                                                           self.params['b' + str(self.num_layers)])
@@ -306,6 +310,10 @@ class FullyConnectedNet(object):
 
         for i in range(self.num_layers - 1, 0, -1):
             L2 += (self.params['W' + str(i)] ** 2).sum()
+            if self.use_dropout:
+                caches[i], dropout_cache = caches[i]
+                dout[i] = dropout_backward(dout[i], dropout_cache)
+
             if self.use_batchnorm:
                 (dout[i - 1],
                  grads['W' + str(i)],
