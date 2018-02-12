@@ -239,7 +239,6 @@ def batchnorm_backward(dout, cache):
     # results in the dx, dgamma, and dbeta variables.                         #
     ###########################################################################
     x, x_norm, gamma, beta, r_mean, r_var, eps = cache
-    # x_norm = (x - r_mean) / np.sqrt(r_var + eps)
 
     m = x.shape[0]
 
@@ -408,15 +407,10 @@ def conv_forward_naive(x, w, b, conv_param):
     for n in range(N):
         for h_t in range(H_):
             for w_t in range(W_):
-                input = x_padded[n, :, h_t:(h_t + HH), w_t:(w_t + WW)]
+                input = x_padded[n, :, stride * h_t:(stride * h_t + HH), stride * w_t:(stride * w_t + WW)]
                 for f in range(F):
                     filter = w[f]
                     out_tmp = (input * filter).sum() + b[f]
-
-                    # print(out_tmp.shape)
-                    #
-                    # print(n, f, h_t, w_t, out_tmp)
-
                     out[n, f, h_t, w_t] = out_tmp
 
     cache = (x, w, b, conv_param)
@@ -461,13 +455,11 @@ def conv_backward_naive(dout, cache):
                 for hh in range(HH):
                     for ww in range(WW):
                         the_w = w[:, :, hh, ww]
-                        the_x = x_padded[n, :, hh + h_t, ww + w_t]
-                        # print(the_x.shape, the_w.shape, the_dout.shape)
-                        dx_padded[n, :, hh + h_t, ww + w_t] += (the_w.T * the_dout).sum(axis=1)
+                        the_x = x_padded[n, :, hh + stride * h_t, ww + stride * w_t]
                         for i in range(the_w.shape[0]):
                             for j in range(the_w.shape[1]):
                                 dw[i, j, hh, ww] += the_dout[i] * the_x[j]
-                                dx_padded[n, j, hh + h_t, ww + w_t] += the_dout[i] * the_w[i][j]
+                                dx_padded[n, j, hh + stride * h_t, ww + stride * w_t] += the_dout[i] * the_w[i][j]
 
     dx = dx_padded[:, :, pad:-pad, pad:-pad]
 
@@ -565,8 +557,8 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
         old information is discarded completely at every time step, while
         momentum=1 means that new information is never incorporated. The
         default of momentum=0.9 should work well in most situations.
-      - running_mean: Array of shape (D,) giving running mean of features
-      - running_var Array of shape (D,) giving running variance of features
+      - running_mean: Array of shape (C,) giving running mean of features
+      - running_var Array of shape (C,) giving running variance of features
 
     Returns a tuple of:
     - out: Output data, of shape (N, C, H, W)
@@ -581,12 +573,11 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     # version of batch normalization defined above. Your implementation should#
     # be very short; ours is less than five lines.                            #
     ###########################################################################
-    pass
-    ###########################################################################
-    #                             END OF YOUR CODE                            #
-    ###########################################################################
-
-    return out, cache
+    x_reshaped = x.reshape(-1, *gamma.shape)
+    out, cache = batchnorm_forward(x_reshaped, gamma, beta, bn_param)
+    x_reshaped, x_reshaped_norm, *kwargs = cache
+    cache = x_reshaped.reshape(x.shape), x_reshaped_norm.reshape(x.shape), *kwargs
+    return out.reshape(x.shape), cache
 
 
 def spatial_batchnorm_backward(dout, cache):
@@ -611,7 +602,11 @@ def spatial_batchnorm_backward(dout, cache):
     # version of batch normalization defined above. Your implementation should#
     # be very short; ours is less than five lines.                            #
     ###########################################################################
-    pass
+    x, x_norm, gamma, *kwargs = cache
+    x_reshaped, x_norm_reshaped = x.reshape(-1, *gamma.shape), x_norm.reshape(-1, *gamma.shape)
+    cache_reshaped = (x_reshaped, x_norm_reshaped, gamma, *kwargs)
+    dx_reshaped, dgamma, dbeta = batchnorm_backward(dout.reshape(-1, *gamma.shape), cache_reshaped)
+    dx = dx_reshaped.reshape(x.shape)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
